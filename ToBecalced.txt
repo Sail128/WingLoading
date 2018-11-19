@@ -1,0 +1,12 @@
+Everything that needs to be done
+generate plots
+    Moment diagram
+    Shear diagram
+    Torque diagram
+plot at 3 different fuel levels
+plot every critical case from the flight envelope
+
+table of known assumptions
+    Cl
+    Cd
+Description of the wing
