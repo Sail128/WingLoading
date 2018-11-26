@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib2tikz import save as tikz_save
 from math import sin, cos, radians, pi
+from numpy import arange
 
 class LoadingDiagram:
     def __init__(self,
@@ -12,7 +13,8 @@ class LoadingDiagram:
     loadFactor,     #load factor for this specific case
     Cls:list,       #[(cl1, cla1 ,x1),(cl2, cla2, x2)] x1< x <x2 gives cl1< cl <cl2 in a linear relation. x>x2 or x<x1 , cl=cl2 and cl=cl1 respectively. all at alpha = 0
     Cm25s:list,     #[(cm1, cma1 ,x1),(cm2, cma2, x2)] x1< x <x2 gives cm1< cm <cm2 in a linear relation. x>x2 or x<x1 , cm=cm2 and cm=cm1 respectively. all at alpha = 0
-    c_l_alpha = 2*pi,    #change in cl per radian for now only a global average is assumed. If not given the standard solution for thin airfoils is used
+    Tcs:list,       #[(t/c,x1), (t/c,x2)]
+    #c_l_alpha = 2*pi,    #change in cl per radian for now only a global average is assumed. If not given the standard solution for thin airfoils is used
     tank:tuple = None    # not yet implemented at all. 
     ):
         self.b = span
@@ -23,12 +25,14 @@ class LoadingDiagram:
         self.loadFactor = loadFactor
         self.cls = Cls
         self.cms = Cm25s
-        self.c_l_alpha = c_l_alpha
+        self.Tcs = Tcs
+        #self.c_l_alpha = c_l_alpha
         self.tank = tank
         self.segmentcount = 20
         self.fuelLevel = 0.0
         self.__segments = None
         self.generateSegments()
+        self.diagrams = {}
         
     def getCl(self, x1, x2):
         #c_l_alpha = 5.723848
@@ -66,10 +70,23 @@ class LoadingDiagram:
 
     def getChord(self, x):
         return self.cr - self.cr*x*(1-self.TR)
-    def getMass(self, segment):
+
+    def getThickness(self, x, cr):
+        tc = None
+        for i in range(len(self.Tcs)):
+            if x<self.Tcs[i][1]:
+                if i>0:
+                    tc = (self.Tcs[i][0] - self.Tcs[i-1][0])/(self.Tcs[i][1] - self.Tcs[i-1][1])*x + self.Tcs[i-1][0]
+                else: tc = self.Tcs[i-1][0]
+                break
+        if tc == None: tc = self.Tcs[-1][0]
+        return tc*cr
+
+    def getMass(self, segment): #THIS IS NOT INDEPENDENT OF SEGMENTCOUNT. ONLY WORKS FOR 20 SEGMENTS
         #Mwing = -13.99*(segment+1) + 401.86 
         Mfuel = 0.0 if segment > 13 else 1.8306*(segment+1)**2 - 104.7*(segment+1) + 1497.3
         return Mfuel*self.fuelLevel
+
 
     def getCm(self, x1,x2):
         cm1 = None
@@ -115,7 +132,9 @@ class LoadingDiagram:
             cl = self.getCl(x1,x2)
             cm = self.getCm(x1,x2)
             m = self.getMass(i)
-            self.__segments.append((S, cl, cm, m, x1, x2))
+            cr = (self.getChord(x1)+self.getChord(x2))/2
+            h = self.getThickness((x1+x2)/2, cr)
+            self.__segments.append((S, cl, cm, m, x1, x2, cr, h))
     
     def getSegments(self):
         return self.__segments
@@ -152,12 +171,6 @@ class LoadingDiagram:
 
         Xs.append(self.b/2)
         Ms.append(0)
-
-        
-        plt.plot(Xs, Ms)
-        plt.ylim(ymin=0)
-        plt.xlim(xmin=0)
-        plt.show()
         return {"Xs":Xs, "Ms":Ms}
 
     def genShearDiagram(self, V, rho):
@@ -177,11 +190,6 @@ class LoadingDiagram:
 
         Xs.append(self.b/2)
         Vs.append(0)
-
-        plt.plot(Xs, Vs)
-        plt.ylim(ymin=0)
-        plt.xlim(xmin=0)
-        plt.show()
         return {"Xs":Xs, "Vs":Vs}
 
     def genTorqueDiagram(self, V, rho):
@@ -201,15 +209,94 @@ class LoadingDiagram:
             Ts.append(torque)
             Xs.append(x1)
 
-        plt.plot(Xs, Ts)
-        plt.ylim(ymin=0)
-        plt.xlim(xmin=0)
-        plt.show()
+        #plt.plot(Xs, Ts)
+        #plt.ylim(ymin=0)
+        #plt.xlim(xmin=0)
+        #plt.show()
         return {"Xs":Xs, "Ts":Ts}
 
-    def genDiagrams(self, V, rho):
-        return {
-        "Moment":self.genMomentDiagram(V,rho),
-        "Shear":self.genShearDiagram(V, rho),
-        "Torque":self.genTorqueDiagram(V, rho)
+    def genDiagrams(self, V, rho, filename=None):
+    #generate moment diagram
+        moments =self.genMomentDiagram(V,rho)
+        ax1 = plt.subplot(311
+        #title="Momentdiagram"
+        )
+        plt.plot(moments["Xs"], moments["Ms"])
+        plt.xlim(xmin=0.0)
+        plt.ylim(ymin=0.0)
+        plt.ylabel("Moment [N*m]")
+        plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        plt.setp(ax1.get_xticklabels(), visible=False)
+        
+    #generate shear diagram
+        shears = self.genShearDiagram(V, rho)
+
+        ax2 = plt.subplot(312, 
+        #title="sheardiagram",
+        sharex=ax1
+        )
+        plt.plot(shears["Xs"], shears["Vs"])
+        plt.xlim(xmin=0.0)
+        plt.ylim(ymin=0.0)
+        plt.ylabel("Shear [N]")
+        plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        plt.setp(ax2.get_xticklabels(), visible=False)
+
+    #generate torque diagram
+        torques = self.genTorqueDiagram(V, rho)
+        ax3 = plt.subplot(313, 
+        #title="torquediagram",
+        sharex=ax1
+        )
+        plt.plot(torques["Xs"], torques["Ts"])
+        plt.xlim(xmin=0.0)
+        plt.ylim(ymin=0.0)
+        plt.ylabel("Torque [N*m]")
+        plt.xlabel("x position along the wing [m]")
+        plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+
+        
+        if filename!=None:
+            tikz_save(filename)
+            print("Plots saved to file")
+        else:
+            plt.show()
+
+        diagrams =  {
+        "Moment":moments,
+        "Shear":shears,
+        "Torque":torques
         }
+        self.diagrams = diagrams
+        return diagrams
+
+    def tipDeflection(self, t): #determines the tip defelction given a spar thickness. Uses the last call to gen diagrams
+        Lseg = (self.b/2)/self.segmentcount
+        E = 73*(10**9)
+        moments = self.diagrams["Moment"]["Ms"]
+        deltas = []
+        for i in range(len(self.__segments)):
+            seg = self.__segments[i]
+            EI = E*2*((1/12)*t*seg[7]**3)
+            EI2 = E*2*((1/12)*t*self.__segments[i-1][7]**3) if i>0 else EI
+            delta = (moments[i+1]*Lseg**2)/(2*EI) 
+            delta += Lseg*(moments[i]*Lseg)/(EI2)if i>0 else 0.0
+            deltas.append(delta)
+        return sum(deltas)
+
+    def getRequiredThicknessDefl(self,delta):
+        t = 0.00001
+        d = 0.0
+        while t < 0.2:
+            d = self.tipDeflection(t)
+            if d<delta:
+                break
+            t+=0.00001
+        if t >= 0.2: 
+            print("No answer reached until a required thickness of 0.2m")
+            return None
+        else:
+            return (t,d)
+
+    def tipTwist(self, V, rho):
+        pass
