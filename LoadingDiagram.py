@@ -86,7 +86,7 @@ class LoadingDiagram:
     def getMass(self, segment): #THIS IS NOT INDEPENDENT OF SEGMENTCOUNT. ONLY WORKS FOR 20 SEGMENTS
         #Mwing = -13.99*(segment+1) + 401.86 
         Mfuel = 0.0 if segment > 13 else 1.8306*(segment+1)**2 - 104.7*(segment+1) + 1497.3
-        return Mfuel*self.fuelLevel
+        return Mfuel*self.fuelLevel*9.81
 
 
     def getCm(self, x1,x2):
@@ -225,7 +225,7 @@ class LoadingDiagram:
         #title="Momentdiagram"
         )
         plt.plot(moments["Xs"], moments["Ms"])
-        plt.title("Diagrams over hald of the wing")
+        plt.title("Diagrams over half of the wing\n for V={} [m/s], n={} and fuel level={}".format(V, self.loadFactor, self. fuelLevel))
         plt.xlim(xmin=0.0)
         if moments["Ms"][0] > 0:
             plt.ylim(ymin=0.0)
@@ -270,7 +270,7 @@ class LoadingDiagram:
 
         
         if filename!=None:
-            tikz_save(filename)
+            #tikz_save(filename)
             plt.savefig(filename.split(".")[0]+".png")
             print("Plots saved to file")
         else:
@@ -291,13 +291,18 @@ class LoadingDiagram:
         E = 73*(10**9)
         moments = self.diagrams["Moment"]["Ms"]
         deltas = []
+        Is = []
         for i in range(len(self.__segments)):
             seg = self.__segments[i]
-            EI = E*2*((1/12)*t*seg[7]**3)
+            I = 2*((1/12)*t*seg[7]**3)
+            Is.append(I)
+            EI = E*I
             EI2 = E*2*((1/12)*t*self.__segments[i-1][7]**3) if i>0 else EI
             delta = (moments[i+1]*Lseg**2)/(2*EI) 
             delta += Lseg*(moments[i]*Lseg)/(EI2)#if i>0 else 0.0
             deltas.append(delta)
+
+        self.diagrams.update({"BendStiffness":{"Is": Is}})
         return sum(deltas)
 
     def getRequiredThicknessDefl(self,delta):#returns the required thickness for a given deflection
@@ -319,15 +324,22 @@ class LoadingDiagram:
         G = 28*(10**9)
         torques = self.diagrams["Torque"]["Ts"]
         thetas = []
+        Js = []
         for i in range(len(self.__segments)):
             seg = self.__segments[i]
-            theta = (Lseg/G)*torques[i]*(1/(4*(seg[7]*0.45*seg[6])**2))*( (2*seg[7])/(tspar) + (2*0.45*seg[6])/(ti) )
+            theta = (Lseg/G)*torques[i]
+            theta *= (1/(4*(seg[7]*0.45*seg[6])**2))
+            theta *= ( (2*seg[7])/(tspar) + (2*0.45*seg[6])/(ti) )
+            J = (4*(seg[7]*0.45*seg[6])**2)/( (2*seg[7])/(tspar) + (2*0.45*seg[6])/(ti) )
+            Js.append(J)
             thetas.append(theta)
+        self.diagrams.update({"TorStiffness":{"Js": Js}})
         return sum(thetas)
 
-    def getRequiredThicknessTwist(self, theta, tspar): #returns the required sheet thikness for a given twist
+    def getRequiredThicknessTwist(self, theta, tspar): #returns the required sheet thikness for a given twist. theta in deg
         t = 0.00001
         th = 0.0
+        theta = radians(theta)
         while t < 0.5:
             th = self.tipTwist(tspar, t)
             if th<theta:
@@ -340,7 +352,7 @@ class LoadingDiagram:
             return (t,th)
         pass
 
-    def getRequiredThickness(self, delta, theta): #returns the spar and skin thickness required for the given deflection and twist
+    def getRequiredThickness(self, delta, theta): #returns the spar and skin thickness required for the given deflection and twist. theta in deg
         tspar = self.getRequiredThicknessDefl(delta)
-        tskin = self.getRequiredThicknessTwist(theta, tspar)
-        return (tspar, tskin)
+        tskin = self.getRequiredThicknessTwist(theta, tspar[0])
+        return (tspar[0], tskin[0])
