@@ -32,7 +32,7 @@ def plotStiffnessDift(filename, diagram, segments):
         plt.plot(Xs, diagram["BendStiffness"]["Is"])
         plt.xlim(xmin=0.0)
         plt.ylim(ymin=0.0)
-        plt.ylabel("Bending stiffness")
+        plt.ylabel("Bending stiffness I [m^4]")
         plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
         plt.setp(ax1.get_xticklabels(), visible=False)
 
@@ -40,7 +40,7 @@ def plotStiffnessDift(filename, diagram, segments):
         plt.plot(Xs, diagram["TorStiffness"]["Js"])
         plt.xlim(xmin=0.0)
         plt.ylim(ymin=0.0)
-        plt.ylabel("Torsional stifness")
+        plt.ylabel("Torsional stifness J [m^4]")
         plt.xlabel("x position along the wing [m]")
         plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
         plt.setp(ax1.get_xticklabels(), visible=False)
@@ -163,7 +163,7 @@ def main():
     case1.fuelLevel = 1.0
     diagram1c = case1.genDiagrams(148, 1.225, filename="case1c.tex")
     
-    calculateCases()
+    #calculateCases()
 
 
 if __name__ == "__main__":

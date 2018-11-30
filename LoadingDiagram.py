@@ -362,7 +362,7 @@ class LoadingDiagram:
     def getRequiredThickness(self, delta, theta): #returns the spar and skin thickness required for the given deflection and twist. theta in deg
         tspar = self.getRequiredThicknessDefl(delta)
         tskin = self.getRequiredThicknessTwist(theta, tspar[0])
-        for i in range(5):
+        for i in range(3):
             print(tspar[0], tskin[0])
             tspar = self.getRequiredThicknessDefl(delta, tskin[0])
             tskin = self.getRequiredThicknessTwist(theta, tspar[0])
