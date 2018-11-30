@@ -286,43 +286,48 @@ class LoadingDiagram:
         self.diagrams = diagrams
         return diagrams
 
-    def tipDeflection(self, t): #determines the tip defelction given a spar thickness. Uses the last call to gen diagrams
+    def tipDeflection(self, t, tskin = None): #determines the tip defelction given a spar thickness. Uses the last call to gen diagrams
         Lseg = (self.b/2)/self.segmentcount
-        E = 73*(10**9)
+        E = 71.7*(10**9)
         moments = self.diagrams["Moment"]["Ms"]
+        stress = []
         deltas = []
         Is = []
         for i in range(len(self.__segments)):
             seg = self.__segments[i]
             I = 2*((1/12)*t*seg[7]**3)
+            I += 2*tskin*0.45*seg[6]*(seg[7]/2)**2 if tskin != None else 0.0
             Is.append(I)
             EI = E*I
             EI2 = E*2*((1/12)*t*self.__segments[i-1][7]**3) if i>0 else EI
             delta = (moments[i+1]*Lseg**2)/(2*EI) 
             delta += Lseg*(moments[i]*Lseg)/(EI2)#if i>0 else 0.0
             deltas.append(delta)
+            stress.append((moments[i+1]*seg[7]/2)/I)
 
         self.diagrams.update({"BendStiffness":{"Is": Is}})
-        return sum(deltas)
+        return (sum(deltas), max(stress))
 
-    def getRequiredThicknessDefl(self,delta):#returns the required thickness for a given deflection
+    def getRequiredThicknessDefl(self,delta, tskin=None):#returns the required thickness for a given deflection
         t = 0.00001
         d = 0.0
+        Syield = 490*(10**6)
         while t < 0.5:
-            d = self.tipDeflection(t)
-            if d<delta:
+            d = self.tipDeflection(t,tskin)
+            if d[0]<delta and d[1]<Syield:
                 break
             t+=0.00001
         if t >= 0.5: 
             print("No answer reached until a required thickness of 0.5m")
             return None
         else:
-            return (t,d)
+            return (t,d[0])
 
     def tipTwist(self, tspar, ti):
         Lseg = (self.b/2)/self.segmentcount
-        G = 28*(10**9)
+        G = 26.9*(10**9)
         torques = self.diagrams["Torque"]["Ts"]
+        shears = []
         thetas = []
         Js = []
         for i in range(len(self.__segments)):
@@ -333,26 +338,32 @@ class LoadingDiagram:
             J = (4*(seg[7]*0.45*seg[6])**2)/( (2*seg[7])/(tspar) + (2*0.45*seg[6])/(ti) )
             Js.append(J)
             thetas.append(theta)
+            shears.append(torques[i]/(2*ti*(seg[7]*0.45*seg[6])))
         self.diagrams.update({"TorStiffness":{"Js": Js}})
-        return sum(thetas)
+        return (sum(thetas), max(shears))
 
     def getRequiredThicknessTwist(self, theta, tspar): #returns the required sheet thikness for a given twist. theta in deg
         t = 0.00001
         th = 0.0
+        Tmax = 324*(10**6)
         theta = radians(theta)
         while t < 0.5:
             th = self.tipTwist(tspar, t)
-            if th<theta:
+            if th[0]<theta and th[1]<Tmax:
                 break
             t+=0.00001
         if t >= 0.5: 
             print("No answer reached until a required thickness of 0.5m")
             return None
         else:
-            return (t,th)
+            return (t,th[0])
         pass
 
     def getRequiredThickness(self, delta, theta): #returns the spar and skin thickness required for the given deflection and twist. theta in deg
         tspar = self.getRequiredThicknessDefl(delta)
         tskin = self.getRequiredThicknessTwist(theta, tspar[0])
+        for i in range(5):
+            print(tspar[0], tskin[0])
+            tspar = self.getRequiredThicknessDefl(delta, tskin[0])
+            tskin = self.getRequiredThicknessTwist(theta, tspar[0])
         return (tspar[0], tskin[0])
